@@ -12,6 +12,8 @@ using NetDevPack.Identity.Model;
 
 var builder = WebApplication.CreateBuilder(args);
 
+#region Configure Services
+
 builder.Services.AddIdentityEntityFrameworkContextConfiguration(options =>
     options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection"),
     b => b.MigrationsAssembly("MinimalApi")));
@@ -67,6 +69,10 @@ builder.Services.AddSwaggerGen(c =>
 
 var app = builder.Build();
 
+#endregion
+
+#region Configure PipeLine
+
 if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
@@ -77,13 +83,22 @@ app.UseAuthConfiguration();
 app.UseHttpsRedirection();
 
 //app.MapGet("/", () => "Hello World!").ExcludeFromDescription();
+MapActions(app);
 
-// POST USER ===================================================
-app.MapPost("/registro", [AllowAnonymous] async (
-    SignInManager<IdentityUser> signInManager,
-    UserManager<IdentityUser> userManager,
-    IOptions<AppJwtSettings> appJwtSettings,
-    RegisterUser registerUser) =>
+app.Run();
+
+#endregion
+
+#region Actions
+
+void MapActions(WebApplication app)
+{
+    // POST USER ===================================================
+    app.MapPost("/registro", [AllowAnonymous] async (
+        SignInManager<IdentityUser> signInManager,
+        UserManager<IdentityUser> userManager,
+        IOptions<AppJwtSettings> appJwtSettings,
+        RegisterUser registerUser) =>
     {
         if (registerUser == null)
             return Results.BadRequest("Usuário não informado");
@@ -115,73 +130,73 @@ app.MapPost("/registro", [AllowAnonymous] async (
         return Results.Ok(jwt);
 
     }).ProducesValidationProblem()
-      .Produces(StatusCodes.Status200OK)
-      .Produces(StatusCodes.Status400BadRequest)
-      .WithName("RegistroUsuario")
-      .WithTags("Usuario");
+          .Produces(StatusCodes.Status200OK)
+          .Produces(StatusCodes.Status400BadRequest)
+          .WithName("RegistroUsuario")
+          .WithTags("Usuario");
 
-// POST USER ===================================================
-app.MapPost("/login", [AllowAnonymous] async (
-        SignInManager<IdentityUser> signInManager,
-        UserManager<IdentityUser> userManager,
-        IOptions<AppJwtSettings> appJwtSettings,
-        LoginUser loginUser) =>
-{
-    if (loginUser == null)
-        return Results.BadRequest("Usuário não informado");
+    // POST USER ===================================================
+    app.MapPost("/login", [AllowAnonymous] async (
+            SignInManager<IdentityUser> signInManager,
+            UserManager<IdentityUser> userManager,
+            IOptions<AppJwtSettings> appJwtSettings,
+            LoginUser loginUser) =>
+    {
+        if (loginUser == null)
+            return Results.BadRequest("Usuário não informado");
 
-    if (!MiniValidator.TryValidate(loginUser, out var errors))
-        return Results.ValidationProblem(errors);
+        if (!MiniValidator.TryValidate(loginUser, out var errors))
+            return Results.ValidationProblem(errors);
 
-    var result = await signInManager.PasswordSignInAsync(loginUser.Email, loginUser.Password, false, true);
+        var result = await signInManager.PasswordSignInAsync(loginUser.Email, loginUser.Password, false, true);
 
-    if (result.IsLockedOut)
-        return Results.BadRequest("Usuário bloqueado");
+        if (result.IsLockedOut)
+            return Results.BadRequest("Usuário bloqueado");
 
-    if (!result.Succeeded)
-        return Results.BadRequest("Usuário ou senha inválidos");
+        if (!result.Succeeded)
+            return Results.BadRequest("Usuário ou senha inválidos");
 
-    var jwt = new JwtBuilder()
-                .WithUserManager(userManager)
-                .WithJwtSettings(appJwtSettings.Value)
-                .WithEmail(loginUser.Email)
-                .WithJwtClaims()
-                .WithUserClaims()
-                .WithUserRoles()
-                .BuildUserResponse();
+        var jwt = new JwtBuilder()
+                    .WithUserManager(userManager)
+                    .WithJwtSettings(appJwtSettings.Value)
+                    .WithEmail(loginUser.Email)
+                    .WithJwtClaims()
+                    .WithUserClaims()
+                    .WithUserRoles()
+                    .BuildUserResponse();
 
-    return Results.Ok(jwt);
+        return Results.Ok(jwt);
 
-}).ProducesValidationProblem()
-      .Produces(StatusCodes.Status200OK)
-      .Produces(StatusCodes.Status400BadRequest)
-      .WithName("LoginUsuario")
-      .WithTags("Usuario");
+    }).ProducesValidationProblem()
+          .Produces(StatusCodes.Status200OK)
+          .Produces(StatusCodes.Status400BadRequest)
+          .WithName("LoginUsuario")
+          .WithTags("Usuario");
 
-// GET FORNECEDOR ===================================================
-app.MapGet("/fornecedor", [AllowAnonymous] async (
-    MinimalContextDb context) =>
+    // GET FORNECEDOR ===================================================
+    app.MapGet("/fornecedor", [AllowAnonymous] async (
+        MinimalContextDb context) =>
 
-    await context.Fornecedores.ToListAsync())
-    .WithName("GetFornecedor")
-    .WithTags("Fornecedor");
+        await context.Fornecedores.ToListAsync())
+        .WithName("GetFornecedor")
+        .WithTags("Fornecedor");
 
-app.MapGet("/fornecedor/{id}", async (
-    Guid id,
-    MinimalContextDb context) =>
+    app.MapGet("/fornecedor/{id}", async (
+        Guid id,
+        MinimalContextDb context) =>
 
-    await context.Fornecedores.FindAsync(id)
-        is Fornecedor fornecedor ? Results.Ok(fornecedor)
-            : Results.NotFound())
-    .Produces<Fornecedor>(StatusCodes.Status200OK)
-    .Produces(StatusCodes.Status404NotFound)
-    .WithName("GetFornecedorPorId")
-    .WithTags("Fornecedor");
+        await context.Fornecedores.FindAsync(id)
+            is Fornecedor fornecedor ? Results.Ok(fornecedor)
+                : Results.NotFound())
+        .Produces<Fornecedor>(StatusCodes.Status200OK)
+        .Produces(StatusCodes.Status404NotFound)
+        .WithName("GetFornecedorPorId")
+        .WithTags("Fornecedor");
 
-// POST FORNECEDOR  ===================================================
-app.MapPost("/fornecedor", [Authorize] async (
-    MinimalContextDb context,
-    Fornecedor fornecedor) =>
+    // POST FORNECEDOR  ===================================================
+    app.MapPost("/fornecedor", [Authorize] async (
+        MinimalContextDb context,
+        Fornecedor fornecedor) =>
     {
         if (!MiniValidator.TryValidate(fornecedor, out var errors))
             return Results.ValidationProblem(errors);
@@ -191,59 +206,60 @@ app.MapPost("/fornecedor", [Authorize] async (
 
         return result > 0
             //? Results.Created($"/fornecedor/{fornecedor.Id}, fornecedor")
-            ? Results.CreatedAtRoute("GetFornecedorPorId", new {id = fornecedor.Id}, fornecedor)
+            ? Results.CreatedAtRoute("GetFornecedorPorId", new { id = fornecedor.Id }, fornecedor)
             : Results.BadRequest("Houve um problema ao salvar o registro");
     })
-    .Produces<Fornecedor>(StatusCodes.Status201Created)
-    .Produces(StatusCodes.Status400BadRequest)
-    .WithName("PostFornecedor")
-    .WithTags("Fornecedor"); ;
+        .Produces<Fornecedor>(StatusCodes.Status201Created)
+        .Produces(StatusCodes.Status400BadRequest)
+        .WithName("PostFornecedor")
+        .WithTags("Fornecedor"); ;
 
-// PUT FORNECEDOR  ===================================================
-app.MapPut("/fornecedor/{id}", [Authorize] async (
-        Guid id,
-        MinimalContextDb context,
-        Fornecedor fornecedor) =>
-{
-    var fornecedorBanco = await context.Fornecedores.AsNoTracking<Fornecedor>().FirstOrDefaultAsync(f => f.Id == id);
-    if (fornecedorBanco == null) return Results.NotFound();
+    // PUT FORNECEDOR  ===================================================
+    app.MapPut("/fornecedor/{id}", [Authorize] async (
+            Guid id,
+            MinimalContextDb context,
+            Fornecedor fornecedor) =>
+    {
+        var fornecedorBanco = await context.Fornecedores.AsNoTracking<Fornecedor>().FirstOrDefaultAsync(f => f.Id == id);
+        if (fornecedorBanco == null) return Results.NotFound();
 
-    if (!MiniValidator.TryValidate(fornecedor, out var errors))
-        return Results.ValidationProblem(errors);
+        if (!MiniValidator.TryValidate(fornecedor, out var errors))
+            return Results.ValidationProblem(errors);
 
-    context.Fornecedores.Update(fornecedor);
-    var result = await context.SaveChangesAsync();
+        context.Fornecedores.Update(fornecedor);
+        var result = await context.SaveChangesAsync();
 
-    return result > 0
-        ? Results.NoContent()
-        : Results.BadRequest("Houve um problema ao salvar o registro");
+        return result > 0
+            ? Results.NoContent()
+            : Results.BadRequest("Houve um problema ao salvar o registro");
 
-}).ProducesValidationProblem()
-    .Produces(StatusCodes.Status204NoContent)
-    .Produces(StatusCodes.Status400BadRequest)
-    .WithName("PutFornecedor")
-    .WithTags("Fornecedor");
+    }).ProducesValidationProblem()
+        .Produces(StatusCodes.Status204NoContent)
+        .Produces(StatusCodes.Status400BadRequest)
+        .WithName("PutFornecedor")
+        .WithTags("Fornecedor");
 
-// DELETE FORNECEDOR  ===================================================
-app.MapDelete("/fornecedor/{id}", [Authorize] async (
-        Guid id,
-        MinimalContextDb context) =>
-{
-    var fornecedor = await context.Fornecedores.FindAsync(id);
-    if (fornecedor == null) return Results.NotFound();
+    // DELETE FORNECEDOR  ===================================================
+    app.MapDelete("/fornecedor/{id}", [Authorize] async (
+            Guid id,
+            MinimalContextDb context) =>
+    {
+        var fornecedor = await context.Fornecedores.FindAsync(id);
+        if (fornecedor == null) return Results.NotFound();
 
-    context.Fornecedores.Remove(fornecedor);
-    var result = await context.SaveChangesAsync();
+        context.Fornecedores.Remove(fornecedor);
+        var result = await context.SaveChangesAsync();
 
-    return result > 0
-        ? Results.NoContent()
-        : Results.BadRequest("Houve um problema ao salvar o registro");
+        return result > 0
+            ? Results.NoContent()
+            : Results.BadRequest("Houve um problema ao salvar o registro");
 
-}).Produces(StatusCodes.Status400BadRequest)
-    .Produces(StatusCodes.Status204NoContent)
-    .Produces(StatusCodes.Status404NotFound)
-    .RequireAuthorization("ExcluirFornecedor")
-    .WithName("DeleteFornecedor")
-    .WithTags("Fornecedor");
+    }).Produces(StatusCodes.Status400BadRequest)
+        .Produces(StatusCodes.Status204NoContent)
+        .Produces(StatusCodes.Status404NotFound)
+        .RequireAuthorization("ExcluirFornecedor")
+        .WithName("DeleteFornecedor")
+        .WithTags("Fornecedor");
+}
 
-app.Run();
+#endregion
